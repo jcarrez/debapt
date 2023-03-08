@@ -1,0 +1,16 @@
+#!/bin/bash
+FN="debapt"
+
+if [ "$1" == "add" ]
+then {
+    cp ./$FN /usr/bin
+    chmod +x /usr/bin/$FN
+} fi
+
+if [ "$1" == "rem" ]
+then {
+    if [ -f "/usr/bin/$FN" ]
+    then {
+        rm /usr/bin/$FN
+    } fi
+} fi

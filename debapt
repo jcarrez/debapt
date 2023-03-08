@@ -1,0 +1,180 @@
+#!/bin/bash
+#VER:20230308
+#$1 update/upgrade/dist-upgrade/install/remove/-v
+
+NTU=$((0))      #Need To Update
+ARGV="$*"       #All ARGV
+ST="$1"         #1st ARVG
+ND="$2"         #2nd ARGV
+DTU=""          #Debapt To Update
+DEBUG="-q"      #Debug ( "-q" -> Off | "" -> On )
+
+#<Functions>
+function get {
+    debug "get"
+    wget $1 -O $2 $DEBUG
+}
+
+function rat {
+    debug "rat"
+    if [ "DEBUG" == "-q" ]
+    then {
+        tar -xf $*
+    } else {
+        tar -xvf $*
+    } fi
+}
+
+function debug {
+     if [ "$DEBUG" != "-q" ]
+     then {
+         echo -e "\n DEBUG - $*\n"
+         read -p "Press anykey to continue..." -n1 -s
+     } fi
+}
+
+function ver {
+    debug "ver"
+    get https://deb.jcarrez.ovh/repo/all/ver /tmp/ver
+}
+
+function update {
+    debug "update"
+    ver
+    while IFS= read -r L
+    do {
+        S=$(echo $L | cut -d' ' -f1) #SHA256
+        A=$(echo $L | cut -d' ' -f2) #Archive
+        if [ -f "/etc/debapt/all/$A" ]
+        then {
+            H=$(sha256sum /etc/debapt/all/$A | cut -d' ' -f1) #LAN SHA
+            debug "update web - $A $S"
+            debug "update lan - $A $H"
+            if [ "$H" != "$S" ]
+            then {
+                NTU=$((NTU+1))
+                DTU=$(echo "$DTU$A ")
+            } fi
+        } fi
+    } done < "/tmp/ver"
+    if [ "$NTU" == "0" ]
+    then {
+        echo "All packages are up to date"
+    } fi
+    echo "$NTU to Update"
+    echo "$DTU"
+}
+
+function upgrade {
+    debug "upgrade"
+    ver
+    while IFS= read -r L
+    do {
+        S=$(echo $L | cut -d' ' -f1) #SHA256
+        A=$(echo $L | cut -d' ' -f2) #Archive
+        debug "S = $S"
+        debug "A = $A"
+        if [ -f "/etc/debapt/all/$A" ]
+        then {
+            H=$(sha256sum /etc/debapt/all/$A | cut -d' ' -f1) #LAN SHA
+            if [ "$H" != "$S" ]
+            then {
+                ND=$(echo $A | cut -d'.' -f2 | cut -d'/' -f2)
+                debug "upgrade ND - $ND"
+                install
+            } fi
+        } fi
+    } done < "/tmp/ver"
+}
+
+function remove {
+    debug "remove"
+    if [ ! -f "/etc/debapt/all/$ND.tar.xz" ]
+    then {
+        get https://deb.jcarrez.ovh/repo/all/$ND.tar.xz /etc/debapt/all/$ND.tar.xz
+    } fi
+
+    if [ -f "/etc/debapt/all/$ND.tar.xz" ]
+    then {
+        cp -v /etc/debapt/all/$ND.tar.xz /tmp/$ND.tar.xz
+        cd /tmp
+        rat $ND.tar.xz
+        cd $ND
+        bash setup rem
+        rm /etc/debapt/all/$ND*
+        rm -Rf /tmp/$ND
+        echo "$ND removed"
+    } fi
+}
+
+function clean {
+    debug "clean"
+    rm /etc/debapt/all/*
+}
+
+function install {
+    debug "install"
+    if [ "$ND" == "default" ]
+    then {
+        debapt install bashrc
+    } else {
+        ver
+        debug "install - $(cat /tmp/ver | cut -d' ' -f2 | grep $ND)"
+        if [[ "$(cat /tmp/ver | cut -d' ' -f3 | grep ./$ND)" == "" ]]
+        then {
+            debug "Not found 2"
+            echo "Not found"
+            exit 2
+        } fi
+        debug "$ND.tar.xz"
+        get https://deb.jcarrez.ovh/repo/all/$ND.tar.xz /etc/debapt/all/$ND.tar.xz
+        cd /tmp
+        cp /etc/debapt/all/$ND.tar.xz /tmp/
+        rat $ND.tar.xz
+        cd $ND
+        bash setup add
+    } fi
+}
+#</Functions>
+
+#<Debug>
+if [ "$(echo $* | grep debug)" != "" ]
+then {
+    DEBUG=""
+} fi
+#</Debug>
+
+#<main>
+if [ ! -d "/etc/debapt/all" ]
+then {
+    mkdir -p /etc/debapt/all
+} fi
+if [ "$ST" == "update" ]
+then {
+    update
+} fi
+if [ "$ST" == "upgrade" ]
+then {
+    upgrade
+} fi
+if [ "$ST" == "remove" ]
+then {
+    remove
+} fi
+if [ "$ST" == "clean" ]
+then {
+    clean
+} fi
+if [ "$ST" == "install" ]
+then {
+    install
+} fi
+if [ "$ST" == "-v" ]
+then {
+    echo "debapt - Version $(cat /usr/bin/debapt | grep VER | cut -d':' -f2 | head -n1)"
+} fi
+if [ "$ST" == "ver" ]
+then {
+    ver
+} fi
+#</main>
